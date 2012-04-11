@@ -34,6 +34,7 @@ class Password_Hash
 			}
 		
 		$this -> hash = '';
+		$this -> salt = '';
 		$this -> time = 0.0;
 		$this -> iterations_log2 = 0;
 		
