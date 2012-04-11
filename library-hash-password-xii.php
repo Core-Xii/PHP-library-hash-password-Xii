@@ -124,7 +124,7 @@ class Password_Hash
 	*/
 	public function hash()
 		{
-		if (!$this -> needs_more_hashing())
+		if (!$this -> need_hashing())
 			{
 			return false;
 			}
@@ -137,7 +137,7 @@ class Password_Hash
 				}
 			$this -> time += microtime(true) - $time_start;
 			}
-			while ($this -> needs_more_hashing());
+			while ($this -> need_hashing());
 		return true;
 		}
 	
