@@ -9,49 +9,26 @@
 
 class Password_Hash
 	{
+	const DEFAULT_ALGORITHM = 'whirlpool';
+	const DEFAULT_MIN_TIME = 2.0;
+	const DEFAULT_MIN_ITERATIONS_LOG2 = 17;
+	
 	public function get_plaintext() { return $this -> plaintext; }
+	public function get_hash() { return $this -> hash; }
+	public function get_salt() { return $this -> salt; }
 	public function get_algorithm() { return $this -> algorithm; }
 	public function get_time() { return $this -> time; }
 	public function get_min_time() { return $this -> min_time; }
 	public function get_iterations_log2() { return $this -> iterations_log2; }
 	public function get_min_iterations_log2() { return $this -> min_iterations_log2; }
 	
-	public function set_plaintext($plaintext)
-		{
-		$this -> hash = '';
-		$this -> salt = '';
-		$this -> time = 0.0;
-		$this -> iterations_log2 = 0;
-		
-		return $this -> plaintext = $plaintext;
-		}
+	public function set_min_time($min_time = self::DEFAULT_MIN_TIME) { return $this -> min_time = $min_time; }
+	public function set_min_iterations_log2($min_iterations_log2 = self::DEFAULT_MIN_ITERATIONS_LOG2) { return $this -> min_iterations_log2 = $min_iterations_log2; }
 	
-	public function set_algorithm($algorithm)
+	public function set_min_requirements($min_time = self::DEFAULT_MIN_TIME, $min_iterations_log2 = self::DEFAULT_MIN_ITERATIONS_LOG2)
 		{
-		if (!in_array($algorithm, hash_algos()))
-			{
-			throw new Exception('Hash algorithm ' . $algorithm . " isn't supported.");
-			}
-		
-		$this -> hash = '';
-		$this -> salt = '';
-		$this -> time = 0.0;
-		$this -> iterations_log2 = 0;
-		
-		return $this -> algorithm = $algorithm;
-		}
-	
-	public function set_min_time($min_time) { return $this -> min_time = $min_time; }
-	public function set_min_iterations_log2($min_iterations_log2) { return $this -> min_iterations_log2 = $min_iterations_log2; }
-	
-	public function generate_salt()
-		{
-		if ($this -> algorithm === '')
-			{
-			throw new Exception("Can't generate salt without setting the algorithm first.");
-			}
-		
-		$this -> salt = self::random_binary_string(strlen(hash($this -> algorithm, '', true)));
+		$this -> min_time = $min_time;
+		$this -> min_iterations_log2 = $min_iterations_log2;
 		}
 	
 	/**
@@ -59,16 +36,28 @@ class Password_Hash
 		
 		For additional salting, make $plaintext = $salt . 'plaintext'; (concatenate salt first to combat partial rainbow cracking)
 	*/
-	public function hash_plaintext($plaintext, $algorithm = 'whirlpool', $min_time = 2.0, $min_iterations_log2 = 17)
+	public function hash_plaintext($plaintext, $algorithm = self::DEFAULT_ALGORITHM, $min_time = self::DEFAULT_MIN_TIME, $min_iterations_log2 = self::DEFAULT_MIN_ITERATIONS_LOG2)
 		{
-		$this -> set_plaintext($plaintext);
 		$this -> set_algorithm($algorithm);
-		$this -> set_min_time($min_time);
-		$this -> set_min_iterations_log2($min_iterations_log2);
+		$this -> plaintext = $plaintext;
 		$this -> generate_salt();
 		$this -> hash = $this -> salt . $plaintext;
+		$this -> min_time = $min_time;
+		$this -> min_iterations_log2 = $min_iterations_log2;
 		
-		$this -> hash();
+		$this -> time = 0.0;
+		$this -> iterations_log2 = 0;
+		while ($this -> need_hashing())
+			{
+			$time_start = microtime(true);
+			for ($i = pow(2, $this -> iterations_log2 ++); $i > 0; -- $i)
+				{
+				$this -> hash = hash($algorithm, $this -> hash, true);
+				}
+			$this -> time += microtime(true) - $time_start;
+			}
+		
+		return $this -> serialize_to_json();
 		}
 	
 	public function serialize_to_json()
@@ -85,8 +74,10 @@ class Password_Hash
 	
 	public function unserialize_from_json($data_json)
 		{
+		$data = json_decode($data_json);
+		$this -> set_algorithm($data -> algorithm);
 		$this -> plaintext = null;
-		$this -> copy_object_property(json_decode($data_json), ['hash', 'salt', 'algorithm', 'time', 'iterations_log2']);
+		self::copy_object_property($data, $this, ['hash', 'salt', 'time', 'iterations_log2']);
 		}
 	
 	public function does_match_plaintext($plaintext)
@@ -94,6 +85,10 @@ class Password_Hash
 		if ($this -> plaintext !== null && $plaintext === $this -> plaintext)
 			{
 			return true;
+			}
+		if ($this -> hash === '')
+			{
+			throw new Exception("Can't compare plaintext without hash.");
 			}
 		
 		$hash = $this -> salt . $plaintext;
@@ -120,14 +115,44 @@ class Password_Hash
 	/**
 		Hash until minimum requirements are met.
 		
+		Must hash plaintext or unserialize before calling this method.
+		
 		Returns whether hashing was needed (and consequently performed).
 	*/
-	public function hash()
+	public function hash($algorithm = null, $min_time = null, $min_iterations_log2 = null)
 		{
+		if ($min_time !== null)
+			{
+			$this -> min_time = $min_time;
+			}
+		if ($min_iterations_log2 !== null)
+			{
+			$this -> min_iterations_log2 = $min_iterations_log2;
+			}
+		
+		if ($algorithm !== null && $algorithm !== $this -> algorithm)
+			{
+			if ($this -> plaintext === null)
+				{
+				throw new Exception("Can't re-hash with different algorithm without plaintext. Compare against plaintext first.");
+				}
+			
+			$this -> set_algorithm($algorithm);
+			$this -> generate_salt();
+			$this -> hash = $this -> salt . $this -> plaintext;
+			$this -> time = 0.0;
+			$this -> iterations_log2 = 0;
+			}
+		
 		if (!$this -> need_hashing())
 			{
 			return false;
 			}
+		if ($this -> hash === '')
+			{
+			throw new Exception("Can't continue hashing without hash. Hash plaintext or unserialize first.");
+			}
+		
 		do
 			{
 			$time_start = microtime(true);
@@ -152,30 +177,56 @@ class Password_Hash
 	
 	private static function random_binary_string($length)
 		{
-		$string = '';
+		$random_binary_string = '';
 		for ($i = $length; $i > 0; -- $i)
 			{
-			$string .= chr(mt_rand(0, 255));
+			$random_binary_string .= chr(mt_rand(0, 255));
 			}
-		return $string;
+		return $random_binary_string;
 		}
 	
-	private function copy_object_property(object $object_source, $property_names)
+	private static function copy_object_property(object $source_object, object $target_object, $property_names)
 		{
 		if (is_string($property_names))
 			{
 			$property_names = [$property_names];
 			}
+		
 		$i = 0;
-		foreach ($property_names as $property_name)
+		foreach ($property_names as $source_property_name => $target_property_name)
 			{
-			if (!isset($this -> {$property_name}))
+			if (!is_string($source_property_name))
 				{
-				throw new Exception("Object doesn't have property named " . $property_name);
+				$source_property_name = $target_property_name;
 				}
-			$this -> {$property_name} = $object_source -> {$property_name};
+			
+			if (!isset($source_object -> {$source_property_name}))
+				{
+				throw new Exception("Source object doesn't have property " . $source_property_name . '.');
+				}
+			if (!isset($target_object -> {$target_property_name}))
+				{
+				throw new Exception("Target object doesn't have property " . $target_property_name . '.');
+				}
+			
+			$target_object -> {$target_property_name} = $source_object -> {$target_property_name};
 			++ $i;
 			}
 		return $i;
+		}
+	
+	private function set_algorithm($algorithm)
+		{
+		if (!in_array($algorithm, hash_algos()))
+			{
+			throw new Exception('Hash algorithm ' . $algorithm . " isn't supported.");
+			}
+		
+		$this -> algorithm = $algorithm;
+		}
+	
+	private function generate_salt()
+		{
+		$this -> salt = self::random_binary_string(strlen(hash($this -> algorithm, '', true)));
 		}
 	}
