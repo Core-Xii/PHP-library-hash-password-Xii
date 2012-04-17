@@ -121,15 +121,6 @@ class Password_Hash
 	*/
 	public function hash($algorithm = null, $min_time = null, $min_iterations_log2 = null)
 		{
-		if ($min_time !== null)
-			{
-			$this -> min_time = $min_time;
-			}
-		if ($min_iterations_log2 !== null)
-			{
-			$this -> min_iterations_log2 = $min_iterations_log2;
-			}
-		
 		if ($algorithm !== null && $algorithm !== $this -> algorithm)
 			{
 			if ($this -> plaintext === null)
@@ -142,6 +133,15 @@ class Password_Hash
 			$this -> hash = $this -> salt . $this -> plaintext;
 			$this -> time = 0.0;
 			$this -> iterations_log2 = 0;
+			}
+		
+		if ($min_time !== null)
+			{
+			$this -> min_time = $min_time;
+			}
+		if ($min_iterations_log2 !== null)
+			{
+			$this -> min_iterations_log2 = $min_iterations_log2;
 			}
 		
 		if (!$this -> need_hashing())
