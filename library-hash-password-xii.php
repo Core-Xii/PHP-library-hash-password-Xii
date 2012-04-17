@@ -36,14 +36,24 @@ class Password_Hash
 		
 		For additional salting, make $plaintext = $salt . 'plaintext'; (concatenate salt first to combat partial rainbow cracking)
 	*/
-	public function hash_plaintext($plaintext, $algorithm = self::DEFAULT_ALGORITHM, $min_time = self::DEFAULT_MIN_TIME, $min_iterations_log2 = self::DEFAULT_MIN_ITERATIONS_LOG2)
+	public function hash_plaintext($plaintext, $algorithm = null, $min_time = null, $min_iterations_log2 = null)
 		{
-		$this -> set_algorithm($algorithm);
+		if ($algorithm !== null)
+			{
+			$this -> set_algorithm($algorithm);
+			}
+		if ($min_time !== null)
+			{
+			$this -> min_time = $min_time;
+			}
+		if ($min_iterations_log2 !== null)
+			{
+			$this -> min_iterations_log2 = $min_iterations_log2;
+			}
+		
 		$this -> plaintext = $plaintext;
 		$this -> generate_salt();
 		$this -> hash = $this -> salt . $plaintext;
-		$this -> min_time = $min_time;
-		$this -> min_iterations_log2 = $min_iterations_log2;
 		
 		$this -> time = 0.0;
 		$this -> iterations_log2 = 0;
@@ -169,11 +179,11 @@ class Password_Hash
 	private $plaintext = null;
 	private $hash = '';
 	private $salt = '';
-	private $algorithm = '';
+	private $algorithm = self::DEFAULT_ALGORITHM;
 	private $time = 0.0;
-	private $min_time = 0.0;
+	private $min_time = self::DEFAULT_MIN_TIME;
 	private $iterations_log2 = 0;
-	private $min_iterations_log2 = 0;
+	private $min_iterations_log2 = self::DEFAULT_MIN_ITERATIONS_LOG2;
 	
 	private static function random_binary_string($length)
 		{
