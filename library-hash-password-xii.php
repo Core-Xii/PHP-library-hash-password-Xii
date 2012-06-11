@@ -92,7 +92,7 @@ class Password_Hash
 	
 	public function does_match_plaintext($plaintext)
 		{
-		if ($this -> plaintext !== null && $plaintext === $this -> plaintext)
+		if ($this -> plaintext !== null && self::constant_time_compare($plaintext, $this -> plaintext))
 			{
 			return true;
 			}
@@ -109,7 +109,7 @@ class Password_Hash
 			}
 		$this -> time = microtime(true) - $time_start;
 		
-		if ($hash === $this -> hash)
+		if (self::constant_time_compare($hash, $this -> hash))
 			{
 			$this -> plaintext = $plaintext;
 			return true;
@@ -223,6 +223,14 @@ class Password_Hash
 			++ $i;
 			}
 		return $i;
+		}
+	
+	private static function constant_time_compare($string_a, $string_b)
+		{
+		/*
+			SHA-1 is used here only for constant time comparison; its insecurity is irrelevant.
+		*/
+		return hash('sha1', $string_a, true) === hash('sha1', $string_b, true);
 		}
 	
 	private function set_algorithm($algorithm)
