@@ -219,7 +219,7 @@ class Password_Hash
 				throw new Exception("Target object doesn't have property " . $target_property_name . '.');
 				}
 			
-			$target_object -> {$target_property_name} = $source_object -> {$target_property_name};
+			$target_object -> {$target_property_name} = $source_object -> {$source_property_name};
 			++ $i;
 			}
 		return $i;
